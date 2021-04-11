@@ -34,8 +34,7 @@ U = 0
 class SingleKriging:
 
     eps = 1.e-10   # Cutoff for comparison to zero
-    # model_parameters_L = [sL rL nL]
-    # model_parameters_H = [sH rH nH]
+    # model_parameters = [s r n]
     
     def __init__(self, XData, KData, model_parameters):
         self.Xdata=XData
