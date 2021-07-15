@@ -2,7 +2,7 @@
 Muti-fidelity co-Kriging on hydraulic conductivity 
 in Upper Sangamon River Watershed (USRW)
 
-Code by Chien-Yung Tseng, University of Illinois Urbana-Champaign
+Code by Chien-Yung Tseng, University of Illinois at Urbana-Champaign
 cytseng2@illinois.edu
 
 """
@@ -447,7 +447,7 @@ linz = np.arange(limz[0], limz[1], dz)
 linz = linz+dz/2
 yy, zz, xx = np.meshgrid(liny, linz, linx)
 
-from pykrige.logmultiok2d import LogMultiOrdinaryKriging2D
+from multifidgp.multikriging import MultiKriging
 import numpy_indexed as npi
 
 for k in range(layers):
@@ -467,14 +467,14 @@ for k in range(layers):
     LKdata=Result[:,2]
     LKdata=LKdata.reshape(np.size(LKdata),-1)
 
-    MultiKrig2d = LogMultiOrdinaryKriging2D(HXdata, HKdata, LXdata, LKdata, 
+    MultiKrig2d = MultiKriging(HXdata, np.log(HKdata), LXdata, np.log(LKdata), 
                                      model_parameters_H, model_parameters_L)
-    Cond_Krig, sigmas = MultiKrig2d.execute(xx[k,:,:], yy[k,:,:])
+    Cond_Krig, sigmas, rho = MultiKrig2d.execute2D(xx[k,:,:], yy[k,:,:])
     print(np.max(Cond_Krig))
     print(np.mean(Cond_Krig))
     refz = linz[k]*np.ones([resx,resy])
-    Cond_K = Cond_Krig
-    sigma = sigmas
+    Cond_K = np.exp(Cond_Krig + 0.5*sigmas)
+    sigma = (np.exp(sigmas)-1)*np.exp(2*Cond_Krig+sigmas)
     
     # Plot the co-Kriging Results
     fig, ax = plt.subplots(2, 1, figsize=(6, 8))
@@ -496,7 +496,7 @@ for k in range(layers):
     for tick in ax[0].yaxis.get_major_ticks():
         tick.label.set_fontsize(14)
 
-    h=ax[1].pcolor(xx[k,:,:],yy[k,:,:],np.sqrt(sigma),cmap='Spectral_r', vmin=0, vmax=0.8) # specified method top
+    h=ax[1].pcolor(xx[k,:,:],yy[k,:,:],np.sqrt(sigma),cmap='Spectral_r', vmin=0, vmax=0.4) # specified method top
     ax[1].plot(HXdata[:,0], HXdata[:,1], c='b', marker='o', markersize=8, fillstyle='none', linestyle='none', label='High Fidelity Data')
     ax[1].plot(LXdata[:,0], LXdata[:,1], c='k', marker='x', markersize=8, fillstyle='none', linestyle='none', label='Low Fidelity Data')
     cbar=fig.colorbar(h,ax=ax[1])
