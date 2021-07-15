@@ -1,9 +1,10 @@
 """
-Bayesian Experimental Design Combining with Multi-fidelity co-Kriging
-for Optimal Future Sample Locations in Upper Sangamon River Watershed (USRW)
+Muti-fidelity co-Kriging on hydraulic conductivity 
+in Upper Sangamon River Watershed (USRW)
 
 Code by Chien-Yung Tseng, University of Illinois Urbana-Champaign
 cytseng2@illinois.edu
+
 """
 
 import numpy as np
@@ -13,6 +14,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import os
 import scipy.stats as st
+
+os.getcwd()
 
 ###############################################################################
 # semivariance function for calculating the nugget, sill, and range in co-Kriging
@@ -168,13 +171,80 @@ Kdata_L=Kdata
 ###############################################################################
 ###############################################################################
 
+# Read the surface topography data
+os.chdir('Data/EERtopograpgy')
+name=os.listdir()
+name.sort()
+if name[0]=='.DS_Store':
+    name.remove('.DS_Store')
+del name[-1]
+n=len(name) # Number of data file
+
+# Determine the minimum and the maximum x, z values in the whole dataset
+datalayers=50 # Number of layers for interpolating the measurement data
+Z=np.empty([n,2])
+for i in range(n):
+    dataframe=pd.read_csv(name[i])
+    data=dataframe.values
+    Z[i,0]=min(pd.to_numeric(data[:,1], errors='coerce'))
+    Z[i,1]=max(pd.to_numeric(data[:,1], errors='coerce'))
+z_min=max(Z[:,0])
+z_max=min(Z[:,1])
+
+# Initiate raw dataset
+Xdata=np.empty([datalayers,n])
+Ydata=np.empty([datalayers,n])
+Zdata=np.empty([datalayers,n])
+Kdata=np.empty([datalayers,n])
+
+# Construct Z and K data by data interpolation
+from scipy.interpolate import NearestNDInterpolator
+from scipy.interpolate import Rbf
+for i in range(n):
+    dataframe=pd.read_csv(name[i])
+    data=dataframe.values
+    x=pd.to_numeric(data[:,0], errors='coerce')
+    z=pd.to_numeric(data[:,1], errors='coerce')   
+    R=pd.to_numeric(data[:,2], errors='coerce')
+    K=pd.to_numeric(data[:,3], errors='coerce')
+    # Interpolation Grid
+    meanx = np.mean(x)
+    xrange = 50 # interpolation data range of x
+    limz = np.array([(int(Z[i,0]/5)+1)*5,int(Z[i,1]/5)*5])
+    resz = datalayers
+    linz = np.linspace(limz[0], limz[1], resz)
+    xint, zint = np.meshgrid(meanx, linz)
+    ix=xint.reshape(-1,)
+    iz=zint.reshape(-1,)
+    # Scipy.interpolate.NearestNDInterpolator (nearest points)
+    InterK= NearestNDInterpolator(np.transpose(np.array([x[abs(x-meanx)<xrange], z[abs(x-meanx)<xrange]])), K[abs(x-meanx)<xrange])
+    Kint = InterK(np.transpose(np.array([ix,iz])))
+    Kint = Kint.reshape(resz,-1)
+    Zdata[:,i]=zint.transpose()
+    Kdata[:,i]=Kint.transpose()
+
+# Construct X and Y data
+dataframe=pd.read_csv('z_coordinate.csv')
+dataframe.sort_values(by=['ProfileName'], inplace=True)
+data=dataframe.values
+for i in range(n):
+    Xdata[:,i]=pd.to_numeric(data[i,15], errors='coerce')
+    Ydata[:,i]=pd.to_numeric(data[i,16], errors='coerce')
+
+# Surface Topography Mapping
+Xsurf_EER=np.concatenate([Xdata[0,:], Ydata[0,:], Zdata[-1,:]+1.25])
+Xsurf_EER=Xsurf_EER.reshape(Xdata.shape[1], 3, order='F')
+###############################################################################
+###############################################################################
+###############################################################################
+
 
 
 ###############################################################################
 # Pumping Test Hydraulic Conductivity data ####################################
 ###############################################################################
 # Read data from .csv
-os.chdir('Data/Pumpdata')
+os.chdir('../Pumpdata')
 dataframe=pd.read_csv('Pumping_Test_Data.csv')
 data=dataframe.values
 
@@ -195,6 +265,13 @@ Kdata = Kdata[~np.isnan(Zdata)]
 Zdata_depth = Zdata_depth[~np.isnan(Zdata)]
 Zdata = Zdata[~np.isnan(Zdata)]
 Z_top = Z_top[~np.isnan(Z_top)]
+
+# Surface Topography Mapping
+X_intop = Xdata
+Y_intop = Ydata
+Z_intop = Z_top
+Xsurf_pump=np.concatenate([X_intop.reshape(-1,), Y_intop.reshape(-1,), Z_intop.reshape(-1,)])
+Xsurf_pump=Xsurf_pump.reshape(len(X_intop), 3, order='F')
 
 # Fit the semivariogram
 from scipy.optimize import curve_fit
@@ -298,9 +375,9 @@ yy, zz, xx = np.meshgrid(liny, linz, linx)
 
 from multifidgp.multikriging import MultiKriging
 import numpy_indexed as npi
-    
+
 # Determine the data
-k = 4 # specify the layer
+k = 4
 HXdata=Xdata_H_region[abs(Xdata_H_region[:,2]-round(linz[k],2))<=0.5*dz,0:2]
 HKdata=Kdata_H_region[abs(Xdata_H_region[:,2]-round(linz[k],2))<=0.5*dz,0:2]
 LXdata=Xdata_L_region[abs(Xdata_L_region[:,2]-round(linz[k],2))<=0.5*dz,0:2]
@@ -315,20 +392,53 @@ LXdata=Result[:,0:2]
 LKdata=Result[:,2]
 LKdata=LKdata.reshape(np.size(LKdata),-1)
 
-MultiKrig = MultiKriging(HXdata, np.log(HKdata), LXdata, np.log(LKdata),
-                                        model_parameters_H, model_parameters_L)
-Cond_Krig, sigmas = MultiKrig.execute2D(xx[k,:,:], yy[k,:,:])
-       
-# Convert the result from lognormal scale back to the normal scale 
-logCond_Krig = np.exp(Cond_Krig + 0.5*sigmas)
-logsigmas = (np.exp(sigmas)-1)*np.exp(2*Cond_Krig+sigmas)
-
-print(np.max(logCond_Krig))
-print(np.mean(logCond_Krig))
-
+MultiKrig2d = MultiKriging(HXdata, np.log(HKdata), LXdata, np.log(LKdata), model_parameters_H, model_parameters_L)
+Cond_Krig, sigmas, rho = MultiKrig2d.execute2D(xx[k,:,:], yy[k,:,:])
 refz = linz[k]*np.ones([resx,resy])
-Cond_K = logCond_Krig
-sigma = logsigmas
+Cond_K = np.exp(Cond_Krig + 0.5*sigmas)
+sigma = (np.exp(sigmas)-1)*np.exp(2*Cond_Krig+sigmas)
+print(np.max(Cond_K))
+print(np.mean(Cond_K))
+   
+# Plot the co-Kriging Results
+fig, ax = plt.subplots(2, 1, figsize=(6, 8))
+h=ax[0].pcolor(xx[k,:,:],yy[k,:,:],Cond_K,cmap='Spectral_r', vmin=0, vmax=0.25)
+ax[0].plot(HXdata[:,0], HXdata[:,1], c='b', marker='o', markersize=8, fillstyle='none', linestyle='none', label='High Fidelity Data')
+ax[0].plot(LXdata[:,0], LXdata[:,1], c='k', marker='x', markersize=8, fillstyle='none', linestyle='none', label='Low Fidelity Data')
+cbar=fig.colorbar(h,ax=ax[0])
+cbar.ax.get_yaxis().labelpad = 15
+cbar.ax.tick_params(labelsize=14)
+cbar.ax.set_ylabel('Conductivity K (cm/s)', rotation=270, fontsize=14)
+#ax[0].legend(loc=4, fontsize=10)
+figname="k = "+str(k+1)+" (depth = "+str(round(linz[k],2))+"m )"
+ax[0].set_title(figname, fontsize=16)
+ax[0].set_ylabel("y (km)", fontsize=14)
+ax[0].set_xlim(limx[0], limx[1])
+ax[0].set_ylim(limy[0], limy[1])
+for tick in ax[0].xaxis.get_major_ticks():
+    tick.label.set_fontsize(14)
+for tick in ax[0].yaxis.get_major_ticks():
+    tick.label.set_fontsize(14)
+
+h=ax[1].pcolor(xx[k,:,:],yy[k,:,:],np.sqrt(sigma),cmap='Spectral_r', vmin=0, vmax=0.4) # specified method top
+ax[1].plot(HXdata[:,0], HXdata[:,1], c='b', marker='o', markersize=8, fillstyle='none', linestyle='none', label='High Fidelity Data')
+ax[1].plot(LXdata[:,0], LXdata[:,1], c='k', marker='x', markersize=8, fillstyle='none', linestyle='none', label='Low Fidelity Data')
+cbar=fig.colorbar(h,ax=ax[1])
+cbar.ax.get_yaxis().labelpad = 15
+cbar.ax.tick_params(labelsize=14)
+cbar.ax.set_ylabel(r'$\sigma (cm/s)$', rotation=270, fontsize=14)
+#ax[1].legend(loc=4, fontsize=10)
+ax[1].set_xlabel("x (km)", fontsize=14)
+ax[1].set_ylabel("y (km)", fontsize=14)
+ax[1].set_xlim(limx[0], limx[1])
+ax[1].set_ylim(limy[0], limy[1])
+for tick in ax[1].xaxis.get_major_ticks():
+    tick.label.set_fontsize(14)
+for tick in ax[1].yaxis.get_major_ticks():
+    tick.label.set_fontsize(14)
+
+figname2="Multifidelity_Kriging, Layer k = "+str(k+1)
+fig.savefig(figname2, dpi=1200)
 ###############################################################################
 ###############################################################################
 ###############################################################################
@@ -340,110 +450,50 @@ sigma = logsigmas
 ###############################################################################
 from multifidgp.multibayesian_exp import MultiBayesianExp
 # specify the optimal coefficient rho from Multi-fidelity co-Kriging
-rho = np.array([0.8826643, 3.47407575, 4.60907016, 0.36591023, 0.19213686])
 pts = 5 # how many suggestion points
 f = np.ones(pts) # 0 for low-fidelity point; 1 for high-fidelity point
 inipt = np.zeros([pts,3],dtype=float)
 newpt = np.zeros([pts,3],dtype=float)
 
-HXdata_Bay = HXdata
-LXdata_Bay = LXdata
-HKdata_Bay = HKdata
-LKdata_Bay = LKdata
-
 # define the sampling domain and sampling resolution
-bndx = np.array([-30, 5])
-bndy = np.array([-10, 20])
+bndx = np.array([-35, 5])
+bndy = np.array([-10, 25])
 bnd = np.concatenate([bndx, bndy], axis=0)
 bnd = bnd.reshape([-1,2])
 res = 1
 
 for n in range(pts):
-    print("Calculating sequential sampling point ", n+1)       
-    Bayesian = MultiBayesianExp(HXdata_Bay, LXdata_Bay, HKdata_Bay, LKdata_Bay,
-                                model_parameters_H, model_parameters_L, rho[k])
-    inis=np.array([np.random.uniform(-35,5), np.random.uniform(-10,25)])
+    print("Calculating sequential sampling point ", n+1)
+    Bayesian = MultiBayesianExp(HXdata, LXdata, HKdata, LKdata, model_parameters_H, model_parameters_L, rho)
+    
+    inis=np.array([np.random.uniform(bndx[0],bndx[1]), np.random.uniform(bndy[0],bndy[1])])
     inipt[n,:]=np.array([inis[0],inis[1],f[n]])
     s = Bayesian.execute_max(bnd, res)
     if f[n]==0:
-        LXdata_Bay=np.concatenate([LXdata_Bay, np.array([s])], axis=0)
-        LKdata_Bay=np.concatenate([LKdata_Bay, np.array([Bayesian.MultiKrig(s, model_parameters_H[1], model_parameters_L[1])[0]])], axis=0)
+        LXdata=np.concatenate([LXdata, np.array([s])], axis=0)
+        LKdata=np.concatenate([LKdata, np.array([Bayesian.MultiKrig(s, model_parameters_H[1], model_parameters_L[1])[0]])], axis=0)
         newpt[n,:]=np.array([s[0],s[1],f[n]])
     elif f[n]==1:
-        HXdata_Bay=np.concatenate([HXdata_Bay, np.array([s])], axis=0)
-        HKdata_Bay=np.concatenate([HKdata_Bay, np.array([Bayesian.MultiKrig(s, model_parameters_H[1], model_parameters_L[1])[0]])], axis=0)
+        HXdata=np.concatenate([HXdata, np.array([s])], axis=0)
+        HKdata=np.concatenate([HKdata, np.array([Bayesian.MultiKrig(s, model_parameters_H[1], model_parameters_L[1])[0]])], axis=0)
         newpt[n,:]=np.array([s[0],s[1],f[n]])
 
-newpt_L=newpt[newpt[:,2]==0,:]
-newpt_H=newpt[newpt[:,2]==1,:]
-print('Initial Points = ')
-print(inipt)
-print('Suggested Points = ')
-print(newpt)
+    # Run Co-Kriging for new rho
+    MultiKrig2d = MultiKriging(HXdata, np.log(HKdata), LXdata, np.log(LKdata), 
+                                     model_parameters_H, model_parameters_L)
+    Cond_Krig, sigmas, rho = MultiKrig2d.execute2D(xx[k,:,:], yy[k,:,:])
+    refz = linz[k]*np.ones([resx,resy])
+    Cond_K = np.exp(Cond_Krig + 0.5*sigmas)
+    sigma = (np.exp(sigmas)-1)*np.exp(2*Cond_Krig+sigmas)
+    print(np.max(Cond_K))
+    print(np.mean(Cond_K))
 
-fig, ax = plt.subplots(2, 1, figsize=(6, 8))
-h=ax[0].pcolor(xx[k,:,:],yy[k,:,:],Cond_K,cmap='Spectral_r', vmin=0, vmax=0.16)
-ax[0].plot(HXdata[:,0], HXdata[:,1], c='b', marker='o', markersize=8, fillstyle='none', linestyle='none', label='High-fidelity Data')
-ax[0].plot(LXdata[:,0], LXdata[:,1], c='k', marker='x', markersize=8, fillstyle='none', linestyle='none', label='Low-fidelity Data')
-cbar=fig.colorbar(h,ax=ax[0])
-cbar.ax.get_yaxis().labelpad = 15
-cbar.ax.tick_params(labelsize=14)
-cbar.ax.set_ylabel('Conductivity K (cm/s)', rotation=270, fontsize=14)
-figname="k = "+str(k+1)+" (depth = "+str(round(linz[k],2))+"m )"
-ax[0].set_title(figname, fontsize=16)
-ax[0].set_ylabel("y (km)", fontsize=14)
-ax[0].set_xlim(limx[0], limx[1])
-ax[0].set_ylim(limy[0], limy[1])
-for tick in ax[0].xaxis.get_major_ticks():
-    tick.label.set_fontsize(14)
-for tick in ax[0].yaxis.get_major_ticks():
-    tick.label.set_fontsize(14)
-    
-h=ax[1].pcolor(xx[k,:,:],yy[k,:,:],np.sqrt(sigma),cmap='Spectral_r', vmin=0, vmax=0.8) # specified method top
-ax[1].plot(HXdata[:,0], HXdata[:,1], c='b', marker='o', markersize=8, fillstyle='none', linestyle='none', label='High-fidelity Data')
-ax[1].plot(LXdata[:,0], LXdata[:,1], c='k', marker='x', markersize=8, fillstyle='none', linestyle='none', label='Low-fidelity Data')
-cbar=fig.colorbar(h,ax=ax[1])
-cbar.ax.get_yaxis().labelpad = 15
-cbar.ax.tick_params(labelsize=14)
-cbar.ax.set_ylabel(r'$\sigma (cm/s)$', rotation=270, fontsize=14)
-ax[1].set_xlabel("x (km)", fontsize=14)
-ax[1].set_ylabel("y (km)", fontsize=14)
-ax[1].set_xlim(limx[0], limx[1])
-ax[1].set_ylim(limy[0], limy[1])
-for tick in ax[1].xaxis.get_major_ticks():
-    tick.label.set_fontsize(14)
-for tick in ax[1].yaxis.get_major_ticks():
-    tick.label.set_fontsize(14)
-
-figname2="Current Result"
-fig.savefig(figname2, dpi=1200)
-
-HXdata_Bay = HXdata
-LXdata_Bay = LXdata
-HKdata_Bay = HKdata
-LKdata_Bay = LKdata
-HXdata_Bay2 = HXdata
-LXdata_Bay2 = LXdata
-HKdata_Bay2 = HKdata
-LKdata_Bay2 = LKdata
-for n in range(pts):
-    from multifidgp.multikriging import MultiKriging
-    Bayesian = MultiBayesianExp(HXdata_Bay, LXdata_Bay, HKdata_Bay, LKdata_Bay,
-                                model_parameters_H, model_parameters_L, rho[k])
-    HXdata_Bay2=np.concatenate([HXdata_Bay2, np.array([newpt_H[-pts+n,0:2]])], axis=0)
-    HKdata_Bay2=np.concatenate([HKdata_Bay2, np.array([Bayesian.MultiKrig(newpt_H[-pts+n,0:2], model_parameters_H[1], model_parameters_L[1])[0]])], axis=0)
-    MultiKrig2 = MultiKriging(HXdata_Bay2, np.log(HKdata_Bay2), LXdata_Bay2, np.log(LKdata_Bay2),
-                                        model_parameters_H, model_parameters_L)
-    Cond_Krig2D, sigmas2D = MultiKrig2.MultiKrig2D(xx[k,:,:], yy[k,:,:], rho[k])
-    # Convert the result from lognormal scale back to the normal scale 
-    Cond_K = np.exp(Cond_Krig2D + 0.5*sigmas2D)
-    sigma = (np.exp(sigmas2D)-1)*np.exp(2*Cond_Krig2D+sigmas2D)
-    
+    # plot the Co-Kriging and Bayesian results
     fig, ax = plt.subplots(2, 1, figsize=(6, 8))
-    h=ax[0].pcolor(xx[k,:,:],yy[k,:,:],Cond_K,cmap='Spectral_r', vmin=0, vmax=0.16)
-    ax[0].plot(HXdata[:,0], HXdata[:,1], c='b', marker='o', markersize=8, fillstyle='none', linestyle='none', label='High-fidelity Data')
+    h=ax[0].pcolor(xx[k,:,:],yy[k,:,:],Cond_K,cmap='Spectral_r', vmin=0, vmax=0.25)
+    ax[0].plot(HXdata[:-n-1,0], HXdata[:-n-1,1], c='b', marker='o', markersize=8, fillstyle='none', linestyle='none', label='High-fidelity Data')
     ax[0].plot(LXdata[:,0], LXdata[:,1], c='k', marker='x', markersize=8, fillstyle='none', linestyle='none', label='Low-fidelity Data')
-    ax[0].plot(newpt[:n+1,0], newpt[:n+1,1], c='r', marker='^', markersize=8, fillstyle='none', linestyle='none', label='Suggested Future Samplings')
+    ax[0].plot(newpt[:n+1,0], newpt[:n+1,1], c='r', marker='^', mew=2, markersize=14, fillstyle='none', linestyle='none', label='Suggested Future Samplings')
     cbar=fig.colorbar(h,ax=ax[0])
     cbar.ax.get_yaxis().labelpad = 15
     cbar.ax.tick_params(labelsize=14)
@@ -462,15 +512,15 @@ for n in range(pts):
         font = {'family': 'serif',
                 'color':  'red',
                 'weight': 'normal',
-                'size': 14,
+                'size': 16,
                 }
     for i in range(n+1):
-        plt.text(newpt[i,0]+0.5, newpt[i,1]+0.5, text1[i], fontdict=font)
+        plt.text(newpt[i,0]+1, newpt[i,1]+1, text1[i], fontdict=font)
 
-    h=ax[1].pcolor(xx[k,:,:],yy[k,:,:],np.sqrt(sigma),cmap='Spectral_r', vmin=0, vmax=0.8) # specified method top
-    ax[1].plot(HXdata[:,0], HXdata[:,1], c='b', marker='o', markersize=8, fillstyle='none', linestyle='none', label='High-fidelity Data')
+    h=ax[1].pcolor(xx[k,:,:],yy[k,:,:],np.sqrt(sigma),cmap='Spectral_r', vmin=0, vmax=0.4) # specified method top
+    ax[1].plot(HXdata[:-n-1,0], HXdata[:-n-1,1], c='b', marker='o', markersize=8, fillstyle='none', linestyle='none', label='High-fidelity Data')
     ax[1].plot(LXdata[:,0], LXdata[:,1], c='k', marker='x', markersize=8, fillstyle='none', linestyle='none', label='Low-fidelity Data')
-    ax[1].plot(newpt[:n+1,0], newpt[:n+1,1], c='r', marker='^', markersize=8, fillstyle='none', linestyle='none', label='Suggested Future Samplings')
+    ax[1].plot(newpt[:n+1,0], newpt[:n+1,1], c='r', marker='^', mew=2, markersize=14, fillstyle='none', linestyle='none', label='Suggested Future Samplings')
     cbar=fig.colorbar(h,ax=ax[1])
     cbar.ax.get_yaxis().labelpad = 15
     cbar.ax.tick_params(labelsize=14)
@@ -488,13 +538,20 @@ for n in range(pts):
     font = {'family': 'serif',
             'color':  'red',
             'weight': 'normal',
-            'size': 14,
+            'size': 16,
             }
     for i in range(n):
-        plt.text(newpt[i,0]+0.5, newpt[i,1]+0.5, text1[i], fontdict=font)
+        plt.text(newpt[i,0]+1, newpt[i,1]+1, text1[i], fontdict=font)
 
     figname2="plus future point " + str(n+1)
     fig.savefig(figname2, dpi=1200)
+    
+newpt_L=newpt[newpt[:,2]==0,:]
+newpt_H=newpt[newpt[:,2]==1,:]
+print('Initial Points = ')
+print(inipt)
+print('Suggested Points = ')
+print(newpt)
 ###############################################################################
 ###############################################################################
 ###############################################################################
