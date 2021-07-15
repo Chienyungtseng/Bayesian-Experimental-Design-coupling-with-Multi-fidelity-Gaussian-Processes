@@ -250,7 +250,7 @@ class MultiKriging:
         mean_star_all = mean_star_all.reshape(dim[0])
         var_star_all = var_star_all.reshape(dim[0])
 
-        return mean_star_all, var_star_all
+        return mean_star_all, var_star_all, rho
 
     def execute2D(self, xx, yy):
         # initialhyp = [ sigma_eps_L  sigma_eps_H rho]
@@ -311,7 +311,7 @@ class MultiKriging:
         #mean_lognormal = np.exp(mean_star_all + 0.5*var_star_all)
         #var_lognormal = (np.exp(var_star_all)-1)*np.exp(2*mean_star_all+var_star_all)
         
-        return mean_star_all, var_star_all
+        return mean_star_all, var_star_all, rho
     
     def execute3D(self, xx, yy, zz):
         # initialhyp = [ sigma_eps_L  sigma_eps_H rho]
@@ -362,7 +362,7 @@ class MultiKriging:
         mean_star_all = mean_star_all.reshape(dim[0], dim[1], dim[2])
         var_star_all = var_star_all.reshape(dim[0], dim[1], dim[2])
         
-        return mean_star_all, var_star_all
+        return mean_star_all, var_star_all, rho
     
     def MultiKrig2D(self, xx, yy, r):
         X_L = self.Xdata_L
