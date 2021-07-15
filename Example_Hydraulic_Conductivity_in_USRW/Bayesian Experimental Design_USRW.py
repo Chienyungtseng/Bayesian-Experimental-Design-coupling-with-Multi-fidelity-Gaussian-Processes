@@ -2,7 +2,7 @@
 Muti-fidelity co-Kriging on hydraulic conductivity 
 in Upper Sangamon River Watershed (USRW)
 
-Code by Chien-Yung Tseng, University of Illinois Urbana-Champaign
+Code by Chien-Yung Tseng, University of Illinois at Urbana-Champaign
 cytseng2@illinois.edu
 
 """
