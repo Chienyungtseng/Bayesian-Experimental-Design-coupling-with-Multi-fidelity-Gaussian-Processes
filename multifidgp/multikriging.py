@@ -266,11 +266,7 @@ class MultiKriging:
         y_H = self.Kdata_H
         rho = hyp[-1]
         # Set up the limit range of rho and assign the value when reaching the limit
-        if rho<0.01:
-            hyp = np.array([0, 0, 1.27])
-            rho = hyp[-1]
-            self.likelihood(hyp)
-        if rho>3:
+        if rho>1:
             hyp = np.array([0, 0, 1])
             rho = hyp[-1]
             self.likelihood(hyp)
