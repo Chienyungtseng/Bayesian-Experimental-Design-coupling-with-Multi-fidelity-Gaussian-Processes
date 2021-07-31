@@ -216,7 +216,11 @@ class MultiKriging:
         y_L = self.Kdata_L
         y_H = self.Kdata_H
         rho = hyp[-1]
-
+        # Set up the limit range of rho and assign the value when reaching the limit
+        if rho>1:
+            hyp = np.array([0, 0, 0.8])
+            rho = hyp[-1]
+            self.likelihood(hyp)
         y = np.concatenate([y_L, y_H])
         
         dim = xx.shape
@@ -267,7 +271,7 @@ class MultiKriging:
         rho = hyp[-1]
         # Set up the limit range of rho and assign the value when reaching the limit
         if rho>1:
-            hyp = np.array([0, 0, 1])
+            hyp = np.array([0, 0, 0.8])
             rho = hyp[-1]
             self.likelihood(hyp)
         y = np.concatenate([y_L, y_H])
@@ -322,6 +326,11 @@ class MultiKriging:
         y_L = self.Kdata_L
         y_H = self.Kdata_H
         rho = hyp[-1]
+        # Set up the limit range of rho and assign the value when reaching the limit
+        if rho>1:
+            hyp = np.array([0, 0, 0.8])
+            rho = hyp[-1]
+            self.likelihood(hyp)
         D = np.size(X_H)/len(X_H)
         y = np.concatenate([y_L, y_H])
         
