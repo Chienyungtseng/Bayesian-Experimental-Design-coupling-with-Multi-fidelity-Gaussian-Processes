@@ -123,14 +123,15 @@ for i in range(n):
     Ydata[:,i]=pd.to_numeric(data[i,16], errors='coerce')
 
 # Convert Electrical Conductivity to Hydraulic Conductivity
-#a = 113.4 ~ 428.7
-#b = 0.012 ~ 0.125
-#c = 3.29 ~ 8.31
-a=400
-b=0.045
-c=6
+# by Lu et al., 2019
+# a = 113.4 ~ 428.7
+# b = 0.012 ~ 0.125
+# c = 3.29 ~ 8.31
 Kdata=Kdata/100*10**6 # S/m to muS/cm
-Kdata=a*np.exp(-b*Kdata)+c # relation by Lu et al., 2019
+a=299.6*np.exp(-0.001147*Kdata)+157
+b=0.2061*exp(-0.0001535*Kdata)+0.004299
+c=7.996*exp(-0.0001264*Kdata)+0.6567
+Kdata=a*np.exp(-b*Kdata)+c
 Kdata=Kdata*100/86400 # m/day to cm/s
     
 # Fit the semivariogram
