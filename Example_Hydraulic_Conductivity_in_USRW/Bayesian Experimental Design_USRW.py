@@ -97,7 +97,20 @@ for i in range(n):
     x=pd.to_numeric(data[:,0], errors='coerce')
     z=pd.to_numeric(data[:,1], errors='coerce')   
     R=pd.to_numeric(data[:,2], errors='coerce')
-    K=pd.to_numeric(data[:,3], errors='coerce')
+    EC=pd.to_numeric(data[:,3], errors='coerce')
+    
+    # Convert Electrical Conductivity to Hydraulic Conductivity
+    # by Lu et al., 2019
+    # a = 113.4 ~ 428.7
+    # b = 0.012 ~ 0.125
+    # c = 3.29 ~ 8.31
+    EC=EC/100*10**6 # S/m to muS/cm
+    a=299.6*np.exp(-0.001147*EC)+157
+    b=0.04061*np.exp(-0.0001535*EC)+0.004299
+    c=7.996*np.exp(-0.0001264*EC)+0.6567
+    K=a*np.exp(-b*EC)+c
+    K=K*100/86400 # m/day to cm/s    
+    
     # Interpolation Grid
     meanx = np.mean(x)
     xrange = 50 # interpolation data range of x
@@ -122,18 +135,6 @@ for i in range(n):
     Xdata[:,i]=pd.to_numeric(data[i,15], errors='coerce')
     Ydata[:,i]=pd.to_numeric(data[i,16], errors='coerce')
 
-# Convert Electrical Conductivity to Hydraulic Conductivity
-# by Lu et al., 2019
-# a = 113.4 ~ 428.7
-# b = 0.012 ~ 0.125
-# c = 3.29 ~ 8.31
-Kdata=Kdata/100*10**6 # S/m to muS/cm
-a=299.6*np.exp(-0.001147*Kdata)+157
-b=0.04061*np.exp(-0.0001535*Kdata)+0.004299
-c=7.996*np.exp(-0.0001264*Kdata)+0.6567
-Kdata=a*np.exp(-b*Kdata)+c
-Kdata=Kdata*100/86400 # m/day to cm/s
-    
 # Fit the semivariogram
 from scipy.optimize import curve_fit
 dis, semivar=semivarf(np.log(Kdata),Xdata,Ydata,Zdata*0.001)
