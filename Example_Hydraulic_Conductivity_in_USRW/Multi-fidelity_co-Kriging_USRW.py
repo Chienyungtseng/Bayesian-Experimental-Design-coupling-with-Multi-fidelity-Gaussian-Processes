@@ -122,6 +122,17 @@ for i in range(n):
     Xdata[:,i]=pd.to_numeric(data[i,15], errors='coerce')
     Ydata[:,i]=pd.to_numeric(data[i,16], errors='coerce')
 
+# Convert Electrical Conductivity to Hydraulic Conductivity
+#a = 113.4 ~ 428.7
+#b = 0.012 ~ 0.125
+#c = 3.29 ~ 8.31
+a=400
+b=0.045
+c=6
+Kdata=Kdata/100*10**6 # S/m to muS/cm
+Kdata=a*np.exp(-b*Kdata)+c # relation by Lu et al., 2019
+Kdata=Kdata*100/86400 # m/day to cm/s    
+
 # Fit the semivariogram
 from scipy.optimize import curve_fit
 dis, semivar=semivarf(np.log(Kdata),Xdata,Ydata,Zdata*0.001)
