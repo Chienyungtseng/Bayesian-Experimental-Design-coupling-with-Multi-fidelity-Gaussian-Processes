@@ -129,8 +129,8 @@ for i in range(n):
 # c = 3.29 ~ 8.31
 Kdata=Kdata/100*10**6 # S/m to muS/cm
 a=299.6*np.exp(-0.001147*Kdata)+157
-b=0.2061*exp(-0.0001535*Kdata)+0.004299
-c=7.996*exp(-0.0001264*Kdata)+0.6567
+b=0.2061*np.exp(-0.0001535*Kdata)+0.004299
+c=7.996*np.exp(-0.0001264*Kdata)+0.6567
 Kdata=a*np.exp(-b*Kdata)+c
 Kdata=Kdata*100/86400 # m/day to cm/s
     
