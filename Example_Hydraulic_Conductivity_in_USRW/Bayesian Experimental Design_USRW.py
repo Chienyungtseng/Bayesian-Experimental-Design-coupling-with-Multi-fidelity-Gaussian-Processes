@@ -107,7 +107,7 @@ for i in range(n):
     EC=EC/100*10**6 # S/m to muS/cm
     a=299.6*np.exp(-0.001147*EC)+157
     b=0.04061*np.exp(-0.0001535*EC)+0.004299
-    c=7.996*np.exp(-0.0001264*EC)+0.6567
+    c=5.496*np.exp(-0.0001264*EC)+0.6567
     K=a*np.exp(-b*EC)+c
     K=K*100/86400 # m/day to cm/s    
     
